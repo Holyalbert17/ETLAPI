@@ -1,0 +1,425 @@
+openapi: 3.1.0
+info:
+  title: Extractor e Integrador de Datos API
+  version: 1.0.0
+  description: >
+    Gestión de orígenes heterogéneos, introspección de esquema, extracción
+    full/delta, validación, deduplicación y exposición dinámica.
+servers:
+  - url: http://localhost:8000
+tags:
+  - name: Auth
+  - name: Sources
+  - name: Schema
+  - name: Data
+  - name: Jobs
+  - name: Errors
+  - name: Health
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Estado del servicio
+      security: []
+      responses:
+        "200":
+          description: OK
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Registra un usuario con rol user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: Creado
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Devuelve un JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string}
+                password: {type: string}
+      responses:
+        "200":
+          description: Token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "401":
+          description: Credenciales inválidas
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Usuario autenticado
+      responses:
+        "200":
+          description: OK
+  /api/v1/sources/types:
+    get:
+      tags: [Sources]
+      summary: Tipos de adaptador registrados
+      responses:
+        "200":
+          description: OK
+  /api/v1/sources:
+    get:
+      tags: [Sources]
+      summary: Lista orígenes. Las credenciales salen enmascaradas.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DataSource"
+    post:
+      tags: [Sources]
+      summary: Registra un origen. Requiere rol admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataSourceCreate"
+      responses:
+        "201":
+          description: Creado
+        "409":
+          description: Nombre duplicado
+  /api/v1/sources/{source_id}:
+    get:
+      tags: [Sources]
+      summary: Obtiene un origen
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      responses:
+        "200": {description: OK}
+        "404": {description: No encontrado}
+    patch:
+      tags: [Sources]
+      summary: Actualiza configuración, schedule, política o estado
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataSourceUpdate"
+      responses:
+        "200": {description: OK}
+    delete:
+      tags: [Sources]
+      summary: Elimina el origen y sus datos
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      responses:
+        "204": {description: Eliminado}
+  /api/v1/sources/{source_id}/schema:
+    get:
+      tags: [Schema]
+      summary: Introspecciona el origen y devuelve el diff estructural
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceSchema"
+  /api/v1/data/{source_name}/tables:
+    get:
+      tags: [Data]
+      summary: Tablas conocidas del origen
+      parameters:
+        - $ref: "#/components/parameters/SourceName"
+      responses:
+        "200": {description: OK}
+  /api/v1/data/{source_name}/{table}:
+    get:
+      tags: [Data]
+      summary: Datos procesados, paginados y filtrables
+      parameters:
+        - $ref: "#/components/parameters/SourceName"
+        - name: table
+          in: path
+          required: true
+          schema: {type: string}
+        - name: limit
+          in: query
+          schema: {type: integer, default: 100, minimum: 1, maximum: 1000}
+        - name: offset
+          in: query
+          schema: {type: integer, default: 0, minimum: 0}
+        - name: order_by
+          in: query
+          schema: {type: string}
+          description: Columna de la lista blanca. Prefijo - para descendente.
+        - name: filter
+          in: query
+          schema: {type: string}
+          description: Formato campo:valor
+      responses:
+        "200":
+          description: Página
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataPage"
+        "400":
+          description: Columna o filtro no permitido
+  /api/v1/data/{source_name}/query:
+    post:
+      tags: [Data]
+      summary: Consulta parametrizada con whitelist de columnas
+      parameters:
+        - $ref: "#/components/parameters/SourceName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRequest"
+      responses:
+        "200": {description: OK}
+        "400": {description: Columna no permitida}
+  /api/v1/extract/{source_id}:
+    post:
+      tags: [Jobs]
+      summary: Dispara una extracción full o delta
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+        - name: mode
+          in: query
+          schema: {type: string, enum: [full, delta], default: full}
+      responses:
+        "202":
+          description: Job aceptado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+  /api/v1/jobs:
+    get:
+      tags: [Jobs]
+      summary: Últimos jobs
+      parameters:
+        - name: source_id
+          in: query
+          schema: {type: integer}
+      responses:
+        "200": {description: OK}
+  /api/v1/jobs/{job_id}:
+    get:
+      tags: [Jobs]
+      summary: Estado, métricas y checkpoint
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+  /api/v1/jobs/{job_id}/retry:
+    post:
+      tags: [Jobs]
+      summary: Reejecuta un job fallido o parcial desde el checkpoint
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "202": {description: Reintento aceptado}
+        "409": {description: El job no es reintentable}
+  /api/v1/errors:
+    get:
+      tags: [Errors]
+      summary: Errores registrados. El stack y el payload solo los ve un admin.
+      parameters:
+        - name: job_id
+          in: query
+          schema: {type: integer}
+        - name: stage
+          in: query
+          schema: {type: string}
+      responses:
+        "200": {description: OK}
+  /api/v1/audit:
+    get:
+      tags: [Errors]
+      summary: Auditoría de accesos y cambios. Solo admin.
+      responses:
+        "200": {description: OK}
+        "403": {description: Prohibido}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    SourceId:
+      name: source_id
+      in: path
+      required: true
+      schema: {type: integer}
+    SourceName:
+      name: source_name
+      in: path
+      required: true
+      schema: {type: string}
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: {type: integer}
+  schemas:
+    Token:
+      type: object
+      properties:
+        access_token: {type: string}
+        token_type: {type: string, example: bearer}
+    UserCreate:
+      type: object
+      required: [username, email, password]
+      properties:
+        username: {type: string}
+        email: {type: string, format: email}
+        password: {type: string}
+    DataSourceCreate:
+      type: object
+      required: [name, type, config]
+      properties:
+        name: {type: string}
+        type: {type: string, example: csv}
+        config: {type: object, additionalProperties: true}
+        canonical_mapping: {type: object, additionalProperties: true}
+        dedup_key:
+          type: array
+          items: {type: string}
+        dedup_policy: {type: string, enum: [skip, update, upsert, flag]}
+        schedule: {type: string, nullable: true, example: "0 */6 * * *"}
+        incremental_column: {type: string, nullable: true}
+        contains_pii: {type: boolean}
+    DataSourceUpdate:
+      type: object
+      properties:
+        config: {type: object, additionalProperties: true}
+        canonical_mapping: {type: object, additionalProperties: true}
+        dedup_key:
+          type: array
+          items: {type: string}
+        dedup_policy: {type: string, enum: [skip, update, upsert, flag]}
+        schedule: {type: string, nullable: true}
+        incremental_column: {type: string, nullable: true}
+        contains_pii: {type: boolean}
+        active: {type: boolean}
+    DataSource:
+      allOf:
+        - $ref: "#/components/schemas/DataSourceCreate"
+        - type: object
+          properties:
+            id: {type: integer}
+            active: {type: boolean}
+            discovered_schema: {type: object, additionalProperties: true, nullable: true}
+    SourceSchema:
+      type: object
+      properties:
+        tables:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              columns:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: {type: string}
+                    type: {type: string}
+                    nullable: {type: boolean}
+                    primary_key: {type: boolean}
+              relations:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    column: {type: string}
+                    referred_table: {type: string}
+                    referred_column: {type: string}
+        diff:
+          type: object
+          properties:
+            changed: {type: boolean}
+            added_tables: {type: array, items: {type: string}}
+            removed_tables: {type: array, items: {type: string}}
+            added_columns: {type: object, additionalProperties: true}
+            removed_columns: {type: object, additionalProperties: true}
+            type_changes: {type: object, additionalProperties: true}
+    QueryRequest:
+      type: object
+      required: [table]
+      properties:
+        table: {type: string}
+        columns:
+          type: array
+          items: {type: string}
+        filters:
+          type: array
+          items:
+            type: object
+            required: [field]
+            properties:
+              field: {type: string}
+              op: {type: string, enum: [eq, ne, gt, lt, like, in]}
+              value: {}
+        order_by: {type: string}
+        limit: {type: integer, default: 100}
+        offset: {type: integer, default: 0}
+    DataPage:
+      type: object
+      properties:
+        total: {type: integer}
+        limit: {type: integer}
+        offset: {type: integer}
+        data:
+          type: array
+          items: {type: object, additionalProperties: true}
+    Job:
+      type: object
+      properties:
+        id: {type: integer}
+        source_id: {type: integer}
+        status: {type: string, enum: [pending, running, success, failed, partial]}
+        mode: {type: string, enum: [full, delta]}
+        started_at: {type: string, format: date-time, nullable: true}
+        finished_at: {type: string, format: date-time, nullable: true}
+        rows_extracted: {type: integer}
+        rows_inserted: {type: integer}
+        rows_updated: {type: integer}
+        rows_duplicated: {type: integer}
+        errors_count: {type: integer}
+        bytes_read: {type: integer}
+        http_status: {type: integer, nullable: true}
+        checkpoint: {type: object, additionalProperties: true}
+security:
+  - bearerAuth: []

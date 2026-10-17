@@ -1,0 +1,17 @@
+{
+  "name": "ventas_excel",
+  "type": "excel",
+  "config": {
+    "path": "examples/ventas.xlsx",
+    "sheets": ["clientes", "pedidos"]
+  },
+  "canonical_mapping": {
+    "clientes": {
+      "nombre": "full_name",
+      "correo": "email"
+    }
+  },
+  "dedup_key": ["id"],
+  "dedup_policy": "upsert",
+  "contains_pii": true
+}

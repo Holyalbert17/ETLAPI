@@ -1,0 +1,4 @@
+id_cliente,nombre,correo,alta,precio
+1,Ana López,ana@example.com,2024-01-15,$ 1200.50
+2,Beto Ruiz,beto@example.com,15/02/2024,€ 99,90
+3,Cia,no-es-email,2024-03-01,$ 10

@@ -1,0 +1,11 @@
+{
+  "name": "ciudades_json",
+  "type": "json",
+  "config": {
+    "path": "examples/ciudades.json",
+    "records_path": "items",
+    "table": "ciudades"
+  },
+  "dedup_key": ["id"],
+  "dedup_policy": "upsert"
+}

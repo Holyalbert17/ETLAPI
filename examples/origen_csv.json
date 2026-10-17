@@ -1,0 +1,22 @@
+{
+  "name": "clientes_csv",
+  "type": "csv",
+  "config": {
+    "path": "examples/clientes.csv",
+    "required_fields": ["customer_id", "email"],
+    "constraints": {
+      "email": {"format": "email"}
+    }
+  },
+  "canonical_mapping": {
+    "default": {
+      "id_cliente": "customer_id",
+      "nombre": "full_name",
+      "correo": "email"
+    }
+  },
+  "dedup_key": ["customer_id"],
+  "dedup_policy": "upsert",
+  "incremental_column": null,
+  "contains_pii": true
+}

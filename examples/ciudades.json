@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"id": "1", "ciudad": "CABA"},
+    {"id": "2", "ciudad": "Rosario"},
+    {"id": "3", "ciudad": "Córdoba"}
+  ]
+}
